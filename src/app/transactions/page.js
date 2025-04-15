@@ -44,8 +44,12 @@ const TransactionForm = ({ onSubmit, initialData = null, onCancel }) => {
   useEffect(() => {
     if (initialData) {
       setFormData({
-        ...initialData,
-        date: format(new Date(initialData.date), 'yyyy-MM-dd')
+        description: initialData.description || '',
+        amount: initialData.amount?.toString() || '',
+        category: initialData.category || '',
+        date: format(new Date(initialData.date), 'yyyy-MM-dd'),
+        isRecurring: initialData.isRecurring || false,
+        recurringFrequency: initialData.recurringFrequency || ''
       });
     }
   }, [initialData]);
@@ -74,6 +78,16 @@ const TransactionForm = ({ onSubmit, initialData = null, onCancel }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+
+    if (!formData.description || !formData.amount || !formData.category || !formData.date) {
+      setError('Please fill in all required fields');
+      return;
+    }
+
+    if (formData.isRecurring && !formData.recurringFrequency) {
+      setError('Please select a recurring frequency');
+      return;
+    }
 
     try {
       const data = {
@@ -107,7 +121,7 @@ const TransactionForm = ({ onSubmit, initialData = null, onCancel }) => {
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
+            <Label htmlFor="description">Description *</Label>
             <Input
               id="description"
               name="description"
@@ -117,19 +131,20 @@ const TransactionForm = ({ onSubmit, initialData = null, onCancel }) => {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="amount">Amount (₹)</Label>
+            <Label htmlFor="amount">Amount (₹) *</Label>
             <Input
               id="amount"
               name="amount"
               type="number"
               step="0.01"
+              min="0"
               value={formData.amount}
               onChange={handleChange}
               required
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="category">Category</Label>
+            <Label htmlFor="category">Category *</Label>
             <Select
               name="category"
               value={formData.category}
@@ -148,7 +163,7 @@ const TransactionForm = ({ onSubmit, initialData = null, onCancel }) => {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="date">Date</Label>
+            <Label htmlFor="date">Date *</Label>
             <Input
               id="date"
               name="date"
@@ -169,7 +184,7 @@ const TransactionForm = ({ onSubmit, initialData = null, onCancel }) => {
           </div>
           {formData.isRecurring && (
             <div className="space-y-2">
-              <Label htmlFor="recurringFrequency">Frequency</Label>
+              <Label htmlFor="recurringFrequency">Frequency *</Label>
               <Select
                 name="recurringFrequency"
                 value={formData.recurringFrequency}
@@ -392,51 +407,6 @@ const ExportTransactionsButton = ({ transactions }) => {
   );
 };
 
-const FixCategoriesButton = () => {
-  const [isFixing, setIsFixing] = useState(false);
-  const [error, setError] = useState(null);
-
-  const handleFixCategories = async () => {
-    setIsFixing(true);
-    setError(null);
-
-    try {
-      const response = await fetch('/api/transactions/fix-categories', {
-        method: 'POST'
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fix categories');
-      }
-
-      window.location.reload();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setIsFixing(false);
-    }
-  };
-
-  return (
-    <div className="flex items-center gap-2">
-      <Button
-        onClick={handleFixCategories}
-        disabled={isFixing}
-        variant="outline"
-      >
-        {isFixing ? 'Fixing...' : 'Fix Categories'}
-      </Button>
-      {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-    </div>
-  );
-};
-
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState([]);
   const [filteredTransactions, setFilteredTransactions] = useState([]);
@@ -596,7 +566,6 @@ export default function TransactionsPage() {
           </p>
         </div>
         <div className="flex items-center gap-4">
-          <FixCategoriesButton />
           <ExportTransactionsButton transactions={filteredTransactions} />
           <Button onClick={() => setIsFormOpen(true)}>
             <PlusCircle className="mr-2 h-4 w-4" />
