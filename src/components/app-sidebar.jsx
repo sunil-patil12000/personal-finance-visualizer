@@ -63,7 +63,7 @@ export function AppSidebar() {
         <div className="mt-auto">
           <div className="flex items-center justify-between px-2 py-1.5">
             <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-              © 2024 Personal Finance
+              © 2025 Personal Finance
             </div>
             <Link
               href="#"

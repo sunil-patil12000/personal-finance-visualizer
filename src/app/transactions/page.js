@@ -2,373 +2,281 @@
 
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
-} from 'recharts';
+import useSWR from 'swr';
+import { fetcher } from '@/utils/fetcher';
 import { exportToCSV } from '@/utils/exportUtils';
-import { Download, Filter } from 'lucide-react';
+import { Edit2, Trash2, PlusCircle, Download, AlertCircle } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
-// Transaction form component
-const TransactionForm = ({ onSubmit, initialData, isEditing, onCancel, isSubmitting }) => {
+const TransactionForm = ({ onSubmit, initialData = null, onCancel }) => {
   const [formData, setFormData] = useState({
-    amount: '',
-    date: format(new Date(), 'yyyy-MM-dd'),
     description: '',
+    amount: '',
     category: '',
+    date: format(new Date(), 'yyyy-MM-dd'),
     isRecurring: false,
     recurringFrequency: ''
   });
-  const [errors, setErrors] = useState({});
+  const [error, setError] = useState(null);
 
-  // Predefined categories
-  const categories = [
-    'Food', 
-    'Transport', 
-    'Entertainment', 
-    'Utilities', 
-    'Housing', 
-    'Healthcare', 
-    'Education', 
+  const CATEGORIES = [
+    'Food & Dining',
+    'Transportation',
+    'Housing',
+    'Utilities',
+    'Shopping',
+    'Entertainment',
+    'Healthcare',
+    'Education',
+    'Personal Care',
     'Other'
   ];
 
   useEffect(() => {
     if (initialData) {
       setFormData({
-        amount: initialData.amount,
-        date: format(new Date(initialData.date), 'yyyy-MM-dd'),
-        description: initialData.description,
-        category: initialData.category || '',
-        isRecurring: initialData.isRecurring || false,
-        recurringFrequency: initialData.recurringFrequency || ''
+        ...initialData,
+        date: format(new Date(initialData.date), 'yyyy-MM-dd')
       });
     }
   }, [initialData]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    const newValue = type === 'checkbox' ? checked : value;
     
-    // Handle special case for isRecurring checkbox
-    if (name === 'isRecurring' && !newValue) {
-      setFormData({ 
-        ...formData, 
-        [name]: newValue,
-        recurringFrequency: '' // Reset frequency when unchecking isRecurring
-      });
+    if (name === 'isRecurring' && !checked) {
+      setFormData(prev => ({
+        ...prev,
+        [name]: checked,
+        recurringFrequency: ''
+      }));
     } else {
-      setFormData({ ...formData, [name]: newValue });
+      setFormData(prev => ({
+        ...prev,
+        [name]: type === 'checkbox' ? checked : value
+      }));
     }
-    
-    // Clear error when user types
-    if (errors[name]) {
-      setErrors({ ...errors, [name]: null });
+
+    if (error) {
+      setError(null);
     }
   };
 
-  const validateForm = () => {
-    const newErrors = {};
-    
-    if (!formData.amount || formData.amount <= 0) {
-      newErrors.amount = 'Amount must be greater than 0';
-    }
-    
-    if (!formData.date) {
-      newErrors.date = 'Date is required';
-    }
-    
-    if (!formData.description.trim()) {
-      newErrors.description = 'Description is required';
-    }
-    
-    if (!formData.category) {
-      newErrors.category = 'Category is required';
-    }
-    
-    if (formData.isRecurring && !formData.recurringFrequency) {
-      newErrors.recurringFrequency = 'Please select a frequency for recurring transactions';
-    }
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (validateForm()) {
-      onSubmit({
+    setError(null);
+
+    try {
+      const data = {
         ...formData,
-        amount: parseFloat(formData.amount)
-      });
+        amount: parseFloat(formData.amount),
+        date: new Date(formData.date)
+      };
+
+      await onSubmit(data);
       
-      // Don't reset the form immediately to prevent UI flicker
-      // Form will be reset after the API call completes
+      if (!initialData) {
+        setFormData({
+          description: '',
+          amount: '',
+          category: '',
+          date: format(new Date(), 'yyyy-MM-dd'),
+          isRecurring: false,
+          recurringFrequency: ''
+        });
+      }
+    } catch (err) {
+      setError(err.message);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-md mb-6">
-      <h2 className="text-xl font-bold mb-4">{isEditing ? 'Edit Transaction' : 'Add New Transaction'}</h2>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="mb-4">
-          <label className="block text-gray-700 mb-2" htmlFor="amount">
-            Amount (₹)
-          </label>
-          <input
-            type="number"
-            step="0.01"
-            id="amount"
-            name="amount"
-            value={formData.amount}
-            onChange={handleChange}
-            className="w-full p-2 border rounded"
-            placeholder="0.00"
-            disabled={isSubmitting}
-          />
-          {errors.amount && <p className="text-red-500 text-sm mt-1">{errors.amount}</p>}
-        </div>
-        
-        <div className="mb-4">
-          <label className="block text-gray-700 mb-2" htmlFor="date">
-            Date
-          </label>
-          <input
-            type="date"
-            id="date"
-            name="date"
-            value={formData.date}
-            onChange={handleChange}
-            className="w-full p-2 border rounded"
-            disabled={isSubmitting}
-          />
-          {errors.date && <p className="text-red-500 text-sm mt-1">{errors.date}</p>}
-        </div>
-        
-        <div className="mb-4">
-          <label className="block text-gray-700 mb-2" htmlFor="description">
-            Description
-          </label>
-          <input
-            type="text"
-            id="description"
-            name="description"
-            value={formData.description}
-            onChange={handleChange}
-            className="w-full p-2 border rounded"
-            placeholder="Groceries, rent, etc."
-            disabled={isSubmitting}
-          />
-          {errors.description && <p className="text-red-500 text-sm mt-1">{errors.description}</p>}
-        </div>
-        
-        <div className="mb-4">
-          <label className="block text-gray-700 mb-2" htmlFor="category">
-            Category <span className="text-red-500">*</span>
-          </label>
-          <select
-            id="category"
-            name="category"
-            value={formData.category}
-            onChange={handleChange}
-            className={`w-full p-2 border rounded ${errors.category ? 'border-red-500' : 'border-gray-300'}`}
-            disabled={isSubmitting}
-          >
-            <option value="">Select a category</option>
-            {categories.map((category) => (
-              <option key={category} value={category}>
-                {category}
-              </option>
-            ))}
-          </select>
-          {errors.category && <p className="text-red-500 text-sm mt-1">{errors.category}</p>}
-        </div>
-        
-        <div className="mb-4 col-span-2">
-          <div className="flex items-center">
-            <input
-              type="checkbox"
+    <Card>
+      <CardHeader>
+        <CardTitle>{initialData ? 'Edit Transaction' : 'Add Transaction'}</CardTitle>
+      </CardHeader>
+      <form onSubmit={handleSubmit}>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="description">Description</Label>
+            <Input
+              id="description"
+              name="description"
+              value={formData.description}
+              onChange={handleChange}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="amount">Amount (₹)</Label>
+            <Input
+              id="amount"
+              name="amount"
+              type="number"
+              step="0.01"
+              value={formData.amount}
+              onChange={handleChange}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="category">Category</Label>
+            <Select
+              name="category"
+              value={formData.category}
+              onValueChange={(value) => handleChange({ target: { name: 'category', value } })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a category" />
+              </SelectTrigger>
+              <SelectContent>
+                {CATEGORIES.map(category => (
+                  <SelectItem key={category} value={category}>
+                    {category}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="date">Date</Label>
+            <Input
+              id="date"
+              name="date"
+              type="date"
+              value={formData.date}
+              onChange={handleChange}
+              required
+            />
+          </div>
+          <div className="flex items-center space-x-2">
+            <Checkbox
               id="isRecurring"
               name="isRecurring"
               checked={formData.isRecurring}
-              onChange={handleChange}
-              className="h-4 w-4 text-blue-600 border-gray-300 rounded"
-              disabled={isSubmitting}
+              onCheckedChange={(checked) => handleChange({ target: { name: 'isRecurring', checked } })}
             />
-            <label className="ml-2 block text-gray-700" htmlFor="isRecurring">
-              This is a recurring transaction
-            </label>
+            <Label htmlFor="isRecurring">Recurring Transaction</Label>
           </div>
-        </div>
-        
-        {formData.isRecurring && (
-          <div className="mb-4 col-span-2">
-            <label className="block text-gray-700 mb-2" htmlFor="recurringFrequency">
-              Frequency
-            </label>
-            <select
-              id="recurringFrequency"
-              name="recurringFrequency"
-              value={formData.recurringFrequency}
-              onChange={handleChange}
-              className="w-full p-2 border rounded"
-              disabled={isSubmitting}
-            >
-              <option value="">Select frequency</option>
-              <option value="weekly">Weekly</option>
-              <option value="monthly">Monthly</option>
-              <option value="yearly">Yearly</option>
-            </select>
-            {errors.recurringFrequency && <p className="text-red-500 text-sm mt-1">{errors.recurringFrequency}</p>}
-          </div>
-        )}
-      </div>
-      
-      <div className="flex justify-between mt-4">
-        <button
-          type="submit"
-          className={`bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 flex items-center gap-2 ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
-          disabled={isSubmitting}
-        >
-          {isSubmitting && (
-            <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-solid border-current border-r-transparent motion-reduce:animate-[spin_1.5s_linear_infinite]"></span>
+          {formData.isRecurring && (
+            <div className="space-y-2">
+              <Label htmlFor="recurringFrequency">Frequency</Label>
+              <Select
+                name="recurringFrequency"
+                value={formData.recurringFrequency}
+                onValueChange={(value) => handleChange({ target: { name: 'recurringFrequency', value } })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select frequency" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="daily">Daily</SelectItem>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                  <SelectItem value="yearly">Yearly</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           )}
-          {isEditing ? 'Update' : 'Add'} Transaction
-        </button>
-        
-        {isEditing && (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400"
-            disabled={isSubmitting}
-          >
-            Cancel
-          </button>
-        )}
-      </div>
-    </form>
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+        <CardFooter className="flex justify-end gap-2">
+          {onCancel && (
+            <Button type="button" variant="outline" onClick={onCancel}>
+              Cancel
+            </Button>
+          )}
+          <Button type="submit">
+            {initialData ? 'Update' : 'Add'} Transaction
+          </Button>
+        </CardFooter>
+      </form>
+    </Card>
   );
 };
 
-// Transaction filters component
-const TransactionFilters = ({ onFilterChange, categories }) => {
-  const [filters, setFilters] = useState({
-    search: '',
-    category: '',
-    dateFrom: '',
-    dateTo: ''
-  });
-  
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    const updatedFilters = { ...filters, [name]: value };
-    setFilters(updatedFilters);
-    onFilterChange(updatedFilters);
-  };
-  
-  const handleReset = () => {
-    const resetFilters = {
-      search: '',
-      category: '',
-      dateFrom: '',
-      dateTo: ''
-    };
-    setFilters(resetFilters);
-    onFilterChange(resetFilters);
-  };
-  
+const TransactionFilters = ({ 
+  searchTerm, 
+  setSearchTerm, 
+  selectedCategory, 
+  setSelectedCategory, 
+  dateRange, 
+  setDateRange,
+  categories 
+}) => {
   return (
-    <div className="bg-white p-4 rounded-lg shadow-md mb-6">
-      <h2 className="text-lg font-semibold mb-3">Filter Transactions</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        <div>
-          <label className="block text-gray-700 mb-1 text-sm" htmlFor="search">
-            Search
-          </label>
-          <input
-            type="text"
+    <Card>
+      <CardHeader>
+        <CardTitle>Filters</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="search">Search</Label>
+          <Input
             id="search"
-            name="search"
-            value={filters.search}
-            onChange={handleChange}
-            className="w-full p-2 border rounded text-sm"
-            placeholder="Search by description"
+            placeholder="Search transactions..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        
-        <div>
-          <label className="block text-gray-700 mb-1 text-sm" htmlFor="category">
-            Category
-          </label>
-          <select
-            id="category"
-            name="category"
-            value={filters.category}
-            onChange={handleChange}
-            className="w-full p-2 border rounded text-sm"
+        <div className="space-y-2">
+          <Label htmlFor="category">Category</Label>
+          <Select
+            value={selectedCategory}
+            onValueChange={setSelectedCategory}
           >
-            <option value="">All Categories</option>
-            {categories.map(category => (
-              <option key={category} value={category}>{category}</option>
-            ))}
-          </select>
+            <SelectTrigger>
+              <SelectValue placeholder="All Categories" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              {categories.map(category => (
+                <SelectItem key={category} value={category}>
+                  {category}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        
-        <div>
-          <label className="block text-gray-700 mb-1 text-sm" htmlFor="dateFrom">
-            From Date
-          </label>
-          <input
-            type="date"
-            id="dateFrom"
-            name="dateFrom"
-            value={filters.dateFrom}
-            onChange={handleChange}
-            className="w-full p-2 border rounded text-sm"
-          />
+        <div className="space-y-2">
+          <Label>Date Range</Label>
+          <div className="flex gap-2">
+            <Input
+              type="date"
+              value={dateRange.from}
+              onChange={(e) => setDateRange(prev => ({ ...prev, from: e.target.value }))}
+            />
+            <Input
+              type="date"
+              value={dateRange.to}
+              onChange={(e) => setDateRange(prev => ({ ...prev, to: e.target.value }))}
+            />
+          </div>
         </div>
-        
-        <div>
-          <label className="block text-gray-700 mb-1 text-sm" htmlFor="dateTo">
-            To Date
-          </label>
-          <input
-            type="date"
-            id="dateTo"
-            name="dateTo"
-            value={filters.dateTo}
-            onChange={handleChange}
-            className="w-full p-2 border rounded text-sm"
-          />
-        </div>
-      </div>
-      <div className="flex justify-end">
-        <button
-          onClick={handleReset}
-          className="bg-gray-300 text-gray-800 px-4 py-1 rounded hover:bg-gray-400 text-sm"
-        >
-          Reset Filters
-        </button>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 };
 
-// Transaction list component
 const TransactionList = ({ transactions, onEdit, onDelete }) => {
-  if (transactions.length === 0) {
-    return (
-      <div className="bg-white p-6 rounded-lg shadow-md text-center">
-        <p className="text-gray-600">No transactions yet. Add one to get started!</p>
-      </div>
-    );
-  }
-
-  // Helper function to format recurring frequency
-  const formatFrequency = (frequency) => {
+  const formatRecurringFrequency = (frequency) => {
     switch (frequency) {
+      case 'daily': return 'Daily';
       case 'weekly': return 'Weekly';
       case 'monthly': return 'Monthly';
       case 'yearly': return 'Yearly';
@@ -377,343 +285,237 @@ const TransactionList = ({ transactions, onEdit, onDelete }) => {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
-          <tr>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-          </tr>
-        </thead>
-        <tbody className="bg-white divide-y divide-gray-200">
-          {transactions.map((transaction) => (
-            <tr key={transaction._id}>
-              <td className="px-6 py-4 whitespace-nowrap">
-                {format(new Date(transaction.date), 'MMM dd, yyyy')}
-              </td>
-              <td className="px-6 py-4">{transaction.description}</td>
-              <td className="px-6 py-4">
-                <span className="inline-block px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                  {transaction.category}
-                </span>
-              </td>
-              <td className="px-6 py-4 whitespace-nowrap">
-                ₹{transaction.amount.toFixed(2)}
-              </td>
-              <td className="px-6 py-4 whitespace-nowrap">
-                {transaction.isRecurring ? (
-                  <span className="inline-block px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
-                    {formatFrequency(transaction.recurringFrequency)}
-                  </span>
-                ) : (
-                  <span className="text-gray-400 text-sm">One-time</span>
-                )}
-              </td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm">
-                <button
-                  onClick={() => onEdit(transaction)}
-                  className="text-blue-600 hover:text-blue-900 mr-3"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => {
-                    if (window.confirm('Are you sure you want to delete this transaction?')) {
-                      onDelete(transaction._id);
-                    }
-                  }}
-                  className="text-red-600 hover:text-red-900"
-                >
-                  Delete
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>Transactions</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Date</TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead>Category</TableHead>
+              <TableHead>Amount</TableHead>
+              <TableHead>Recurring</TableHead>
+              <TableHead>Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {transactions.map(transaction => (
+              <TableRow key={transaction._id}>
+                <TableCell>{format(new Date(transaction.date), 'MMM dd, yyyy')}</TableCell>
+                <TableCell>{transaction.description}</TableCell>
+                <TableCell>{transaction.category}</TableCell>
+                <TableCell>₹{transaction.amount.toFixed(2)}</TableCell>
+                <TableCell>
+                  {transaction.isRecurring ? (
+                    <Badge variant="secondary">
+                      {formatRecurringFrequency(transaction.recurringFrequency)}
+                    </Badge>
+                  ) : (
+                    <span>-</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onEdit(transaction)}
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onDelete(transaction._id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   );
 };
 
-// Monthly expenses chart component
 const MonthlyExpensesChart = ({ data }) => {
-  if (!data || data.length === 0) {
-    return (
-      <div className="bg-white p-6 rounded-lg shadow-md text-center mt-6">
-        <p className="text-gray-600">No data available for the chart yet.</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="bg-white p-6 rounded-lg shadow-md mt-6">
-      <h2 className="text-xl font-bold mb-4">Monthly Expenses</h2>
-      <div className="h-80">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="name" angle={-45} textAnchor="end" height={60} />
-            <YAxis 
-              tickFormatter={(value) => `₹${value}`}
-              label={{ value: 'Amount (₹)', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
-            />
-            <Tooltip formatter={(value) => [`₹${value}`, 'Amount']} />
-            <Bar dataKey="amount" fill="#4f46e5" />
+    <Card>
+      <CardHeader>
+        <CardTitle>Monthly Expenses</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={data}>
+            <XAxis dataKey="month" />
+            <YAxis />
+            <Tooltip />
+            <Bar dataKey="amount" fill="#8884d8" />
           </BarChart>
         </ResponsiveContainer>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 };
 
-// Add a component for exporting transactions
-const ExportButton = ({ transactions }) => {
+const ExportTransactionsButton = ({ transactions }) => {
   const handleExport = () => {
-    const headers = [
-      { key: 'date', display: 'Date', type: 'date' },
-      { key: 'description', display: 'Description' },
-      { key: 'category', display: 'Category' },
-      { key: 'amount', display: 'Amount (₹)', type: 'currency' }
-    ];
+    const csv = exportToCSV(transactions, [
+      { key: 'date', label: 'Date' },
+      { key: 'description', label: 'Description' },
+      { key: 'category', label: 'Category' },
+      { key: 'amount', label: 'Amount' },
+      { key: 'isRecurring', label: 'Recurring' },
+      { key: 'recurringFrequency', label: 'Frequency' }
+    ]);
     
-    const fileName = `transactions-${new Date().toISOString().split('T')[0]}.csv`;
-    exportToCSV(transactions, headers, fileName);
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `transactions_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
   };
-  
+
   return (
-    <button
-      onClick={handleExport}
-      disabled={!transactions.length}
-      className={`flex items-center gap-1 px-3 py-1.5 rounded text-sm ${
-        transactions.length 
-          ? 'bg-green-600 text-white hover:bg-green-700' 
-          : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-      }`}
-    >
-      <Download size={16} />
-      <span>Export CSV</span>
-    </button>
+    <Button onClick={handleExport} variant="outline">
+      <Download className="mr-2 h-4 w-4" />
+      Export Transactions
+    </Button>
   );
 };
 
-// Add a component to fix categories for existing transactions
-const CategoryFixer = () => {
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
-  const [count, setCount] = useState(0);
+const FixCategoriesButton = () => {
+  const [isFixing, setIsFixing] = useState(false);
+  const [error, setError] = useState(null);
 
-  const checkTransactionsToFix = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch('/api/transactions/migrate');
-      
-      if (!response.ok) {
-        throw new Error('Failed to check transactions');
-      }
-      
-      const data = await response.json();
-      setCount(data.transactionsToFix);
-      
-      if (data.transactionsToFix === 0) {
-        setMessage('No transactions need category fixes');
-      } else {
-        setMessage(`Found ${data.transactionsToFix} transactions that need categories fixed`);
-      }
-    } catch (error) {
-      console.error('Error checking transactions:', error);
-      setMessage('Error checking transactions');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const handleFixCategories = async () => {
+    setIsFixing(true);
+    setError(null);
 
-  const fixCategories = async () => {
     try {
-      setLoading(true);
-      const response = await fetch('/api/transactions/migrate', {
+      const response = await fetch('/api/transactions/fix-categories', {
         method: 'POST'
       });
-      
+
       if (!response.ok) {
-        throw new Error('Failed to migrate transactions');
+        throw new Error('Failed to fix categories');
       }
-      
-      const data = await response.json();
-      setMessage(data.message);
-      setCount(0);
-      
-    } catch (error) {
-      console.error('Error fixing transactions:', error);
-      setMessage('Error fixing transaction categories');
+
+      window.location.reload();
+    } catch (err) {
+      setError(err.message);
     } finally {
-      setLoading(false);
+      setIsFixing(false);
     }
   };
 
-  useEffect(() => {
-    checkTransactionsToFix();
-  }, []);
-
-  if (count === 0 && !message.includes('Error')) {
-    return null;
-  }
-
   return (
-    <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-6">
-      <h3 className="font-semibold text-yellow-800 mb-2">Transaction Category Fixer</h3>
-      <p className="text-sm text-yellow-700 mb-3">{message}</p>
-      
-      <div className="flex gap-2">
-        <button
-          onClick={checkTransactionsToFix}
-          disabled={loading}
-          className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded text-sm hover:bg-yellow-200"
-        >
-          Check Again
-        </button>
-        
-        {count > 0 && (
-          <button
-            onClick={fixCategories}
-            disabled={loading}
-            className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600"
-          >
-            Fix Categories
-          </button>
-        )}
-        
-        {loading && <span className="text-sm text-gray-500">Loading...</span>}
-      </div>
+    <div className="flex items-center gap-2">
+      <Button
+        onClick={handleFixCategories}
+        disabled={isFixing}
+        variant="outline"
+      >
+        {isFixing ? 'Fixing...' : 'Fix Categories'}
+      </Button>
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
     </div>
   );
 };
 
-// Main Transactions Page
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState([]);
   const [filteredTransactions, setFilteredTransactions] = useState([]);
   const [monthlyData, setMonthlyData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [dateRange, setDateRange] = useState({
+    from: format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), 'yyyy-MM-dd'),
+    to: format(new Date(), 'yyyy-MM-dd')
+  });
   const [editingTransaction, setEditingTransaction] = useState(null);
-  
-  // Categories array
-  const categories = [
-    'Food', 
-    'Transport', 
-    'Entertainment', 
-    'Utilities', 
-    'Housing', 
-    'Healthcare', 
-    'Education', 
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [formKey, setFormKey] = useState(0);
+  const [error, setError] = useState(null);
+
+  const CATEGORIES = [
+    'Food & Dining',
+    'Transportation',
+    'Housing',
+    'Utilities',
+    'Shopping',
+    'Entertainment',
+    'Healthcare',
+    'Education',
+    'Personal Care',
     'Other'
   ];
 
-  // Fetch transactions
-  const fetchTransactions = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch('/api/transactions');
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch transactions');
-      }
-      
-      const data = await response.json();
-      setTransactions(data);
-      setLoading(false);
-    } catch (error) {
-      setError('Error loading transactions. Please check your database connection.');
-      setTransactions([]);
-      setLoading(false);
-      console.error('Error fetching transactions:', error);
-    }
-  };
+  const { data: transactionsData, error: transactionsError } = useSWR(
+    '/api/transactions',
+    fetcher
+  );
 
-  // Fetch monthly data for chart
-  const fetchMonthlyData = async () => {
-    try {
-      const response = await fetch('/api/transactions/monthly');
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch monthly data');
-      }
-      
-      const data = await response.json();
-      setMonthlyData(data);
-    } catch (error) {
-      setMonthlyData([]);
-      console.error('Error fetching monthly data:', error);
-    }
-  };
+  const { data: monthlyDataResponse } = useSWR(
+    '/api/transactions/monthly',
+    fetcher
+  );
 
-  // Apply filters to transactions
-  const applyFilters = (transactions, filters) => {
-    return transactions.filter(transaction => {
-      // Search filter
-      if (filters.search && !transaction.description.toLowerCase().includes(filters.search.toLowerCase())) {
-        return false;
-      }
-      
-      // Category filter
-      if (filters.category && transaction.category !== filters.category) {
-        return false;
-      }
-      
-      // Date range filters
-      const transactionDate = new Date(transaction.date);
-      if (filters.dateFrom) {
-        const fromDate = new Date(filters.dateFrom);
-        if (transactionDate < fromDate) {
-          return false;
-        }
-      }
-      
-      if (filters.dateTo) {
-        const toDate = new Date(filters.dateTo);
-        toDate.setHours(23, 59, 59, 999); // Set to end of day
-        if (transactionDate > toDate) {
-          return false;
-        }
-      }
-      
-      return true;
-    });
-  };
-
-  // Handle filter changes
-  const handleFilterChange = (filters) => {
-    setFilteredTransactions(applyFilters(transactions, filters));
-  };
-
-  // Load data on mount
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        await fetchTransactions();
-        await fetchMonthlyData();
-      } catch (error) {
-        console.error('Error loading transactions page data:', error);
-      }
-    };
-    
-    loadData();
-  }, []);
-  
-  // Update filtered transactions when transactions change
-  useEffect(() => {
-    setFilteredTransactions(transactions);
-  }, [transactions]);
+    if (transactionsData) {
+      setTransactions(transactionsData);
+    }
+  }, [transactionsData]);
 
-  // Add transaction
+  useEffect(() => {
+    if (monthlyDataResponse) {
+      setMonthlyData(monthlyDataResponse);
+    }
+  }, [monthlyDataResponse]);
+
+  useEffect(() => {
+    let filtered = [...transactions];
+
+    if (searchTerm) {
+      filtered = filtered.filter(t => 
+        t.description.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    if (selectedCategory && selectedCategory !== 'all') {
+      filtered = filtered.filter(t => t.category === selectedCategory);
+    }
+
+    if (dateRange.from && dateRange.to) {
+      const fromDate = new Date(dateRange.from);
+      const toDate = new Date(dateRange.to);
+      toDate.setHours(23, 59, 59, 999);
+
+      filtered = filtered.filter(t => {
+        const transactionDate = new Date(t.date);
+        return transactionDate >= fromDate && transactionDate <= toDate;
+      });
+    }
+
+    setFilteredTransactions(filtered);
+  }, [transactions, searchTerm, selectedCategory, dateRange]);
+
   const handleAddTransaction = async (formData) => {
     try {
-      setIsSubmitting(true);
       const response = await fetch('/api/transactions', {
         method: 'POST',
         headers: {
@@ -726,31 +528,17 @@ export default function TransactionsPage() {
         throw new Error('Failed to add transaction');
       }
 
-      // Add the new transaction to state directly for optimistic UI update
       const newTransaction = await response.json();
       setTransactions(prev => [newTransaction, ...prev]);
-      setFilteredTransactions(prev => [newTransaction, ...prev]);
-      
-      // Reset form by forcing a re-render with a key change
-      setFormKey(prevKey => prevKey + 1);
-      
-      // Refresh chart data - can be done in the background
-      fetchMonthlyData();
-      
-      // Only show success message, don't reload all transactions
-      setError(null);
-    } catch (error) {
-      setError('Error adding transaction. Please try again.');
-      console.error('Error adding transaction:', error);
-    } finally {
-      setIsSubmitting(false);
+      setIsFormOpen(false);
+      setFormKey(prev => prev + 1);
+    } catch (err) {
+      setError(err.message);
     }
   };
 
-  // Update transaction
   const handleUpdateTransaction = async (formData) => {
     try {
-      setIsSubmitting(true);
       const response = await fetch(`/api/transactions/${editingTransaction._id}`, {
         method: 'PUT',
         headers: {
@@ -764,31 +552,16 @@ export default function TransactionsPage() {
       }
 
       const updatedTransaction = await response.json();
-      
-      // Update local state without fetching all transactions again
       setTransactions(prev => 
         prev.map(t => t._id === updatedTransaction._id ? updatedTransaction : t)
       );
-      setFilteredTransactions(prev => 
-        prev.map(t => t._id === updatedTransaction._id ? updatedTransaction : t)
-      );
-      
-      // Reset editing state
       setEditingTransaction(null);
-      
-      // Refresh chart data - can be done in the background
-      fetchMonthlyData();
-      
-      setError(null);
-    } catch (error) {
-      setError('Error updating transaction. Please try again.');
-      console.error('Error updating transaction:', error);
-    } finally {
-      setIsSubmitting(false);
+      setIsFormOpen(false);
+    } catch (err) {
+      setError(err.message);
     }
   };
 
-  // Delete transaction
   const handleDeleteTransaction = async (id) => {
     try {
       const response = await fetch(`/api/transactions/${id}`, {
@@ -799,16 +572,12 @@ export default function TransactionsPage() {
         throw new Error('Failed to delete transaction');
       }
 
-      // Refresh data
-      fetchTransactions();
-      fetchMonthlyData();
-    } catch (error) {
-      setError('Error deleting transaction. Please try again.');
-      console.error('Error deleting transaction:', error);
+      setTransactions(prev => prev.filter(t => t._id !== id));
+    } catch (err) {
+      setError(err.message);
     }
   };
 
-  // Handle form submission (add or update)
   const handleSubmit = (formData) => {
     if (editingTransaction) {
       handleUpdateTransaction(formData);
@@ -817,59 +586,78 @@ export default function TransactionsPage() {
     }
   };
 
-  // State to force form re-render on submission
-  const [formKey, setFormKey] = useState(0);
-
-  if (loading) {
-    return <div className="text-center p-6">Loading transactions...</div>;
-  }
-
   return (
-    <div className="max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Transactions</h1>
-      
-      {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
-          {error}
+    <div className="container mx-auto py-8 space-y-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Transactions</h1>
+          <p className="text-muted-foreground">
+            Manage your financial transactions
+          </p>
         </div>
-      )}
-      
-      <CategoryFixer />
-      
-      <TransactionForm 
-        key={formKey}
-        onSubmit={handleSubmit}
-        initialData={editingTransaction}
-        isEditing={!!editingTransaction}
-        onCancel={() => setEditingTransaction(null)}
-        isSubmitting={isSubmitting}
-      />
-      
-      <TransactionFilters 
-        onFilterChange={handleFilterChange} 
-        categories={categories}
-      />
-      
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold">Transaction History</h2>
-        <div className="flex items-center gap-3">
-          <div className="text-sm text-gray-500">
-            {filteredTransactions.length === transactions.length 
-              ? `Showing all ${transactions.length} transactions` 
-              : `Showing ${filteredTransactions.length} of ${transactions.length} transactions`
-            }
-          </div>
-          <ExportButton transactions={filteredTransactions} />
+        <div className="flex items-center gap-4">
+          <FixCategoriesButton />
+          <ExportTransactionsButton transactions={filteredTransactions} />
+          <Button onClick={() => setIsFormOpen(true)}>
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Add Transaction
+          </Button>
         </div>
       </div>
-      
-      <TransactionList 
-        transactions={filteredTransactions} 
-        onEdit={setEditingTransaction}
-        onDelete={handleDeleteTransaction}
-      />
-      
-      <MonthlyExpensesChart data={monthlyData} />
+
+      <div className="grid gap-8 md:grid-cols-3">
+        <div className="md:col-span-1">
+          <TransactionFilters
+            searchTerm={searchTerm}
+            setSearchTerm={setSearchTerm}
+            selectedCategory={selectedCategory}
+            setSelectedCategory={setSelectedCategory}
+            dateRange={dateRange}
+            setDateRange={setDateRange}
+            categories={CATEGORIES}
+          />
+        </div>
+        <div className="md:col-span-2 space-y-8">
+          <MonthlyExpensesChart data={monthlyData} />
+          <TransactionList
+            transactions={filteredTransactions}
+            onEdit={(transaction) => {
+              setEditingTransaction(transaction);
+              setIsFormOpen(true);
+            }}
+            onDelete={handleDeleteTransaction}
+          />
+        </div>
+      </div>
+
+      {isFormOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle>
+                {editingTransaction ? 'Edit Transaction' : 'Add Transaction'}
+              </CardTitle>
+            </CardHeader>
+            <TransactionForm
+              key={formKey}
+              onSubmit={handleSubmit}
+              initialData={editingTransaction}
+              onCancel={() => {
+                setIsFormOpen(false);
+                setEditingTransaction(null);
+              }}
+            />
+          </Card>
+        </div>
+      )}
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
     </div>
   );
 } 
