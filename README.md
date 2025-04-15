@@ -1,52 +1,109 @@
 # Personal Finance Visualizer
 
-A modern web app to track your finances, visualize expenses, and manage budgets.
+A modern web application for managing and visualizing personal finances, built with Next.js and MongoDB.
 
 ## Features
 
-- **Track Transactions**
+- **Transaction Management**
   - Add, edit, and delete transactions
-  - View transaction history
-  - Categorize your expenses
+  - Categorize transactions
+  - Support for recurring transactions
+  - Export transactions to CSV
+  - Advanced filtering and search
 
-- **Manage Budgets**
-  - Set monthly budgets by category
-  - Track spending vs budget
-  - View budget insights
+- **Budget Management**
+  - Create and manage budgets by category
+  - Track spending against budgets
+  - Visual budget comparison charts
+  - Monthly budget overview
 
-- **Visualize Data**
-  - Interactive expense charts
-  - Budget comparison views
-  - Spending patterns analysis
+- **Visual Analytics**
+  - Monthly expense charts
+  - Budget vs actual spending visualization
+  - Category-wise spending analysis
+
+- **Modern UI**
+  - Built with shadcn/ui components
+  - Responsive design
+  - Dark mode support
+  - Interactive charts and graphs
 
 ## Tech Stack
 
-- Next.js 14
-- shadcn/ui
+- **Frontend**
+  - Next.js 14
+  - React 19
+  - shadcn/ui
+  - Tailwind CSS
+  - Recharts
+
+- **Backend**
+  - Next.js API Routes
+  - MongoDB
+  - Mongoose
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+
 - MongoDB
-- Tailwind CSS
-- Recharts
+- npm or yarn
 
-## Quick Start
+### Installation
 
-1. Clone and install:
+1. Clone the repository:
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/yourusername/personal-finance-visualizer.git
    cd personal-finance-visualizer
-   npm install
    ```
 
-2. Set up environment:
-   - Copy `.env.local.example` to `.env.local`
-   - Add your MongoDB connection string
+2. Install dependencies:
+   ```bash
+   npm install
+   # or
+   yarn install
+   ```
 
-3. Run the app:
+3. Set up environment variables:
+   Create a `.env.local` file in the root directory with the following variables:
+   ```
+   MONGODB_URI=your_mongodb_connection_string
+   ```
+
+4. Start the development server:
    ```bash
    npm run dev
+   # or
+   yarn dev
    ```
 
-4. Open [http://localhost:3000](http://localhost:3000)
+5. Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+## Project Structure
+
+```
+src/
+├── app/
+│   ├── budgets/         # Budget management pages
+│   ├── transactions/    # Transaction management pages
+│   └── layout.js        # Root layout
+├── components/
+│   ├── ui/             # shadcn/ui components
+│   └── shared/         # Shared components
+├── models/             # MongoDB models
+├── utils/             # Utility functions
+└── lib/               # Library functions
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## License
 
-MIT License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
